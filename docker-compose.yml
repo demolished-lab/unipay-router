@@ -2,11 +2,29 @@ services:
   unipay-router:
     build: .
     ports:
-      - "3000:3000"
+      - "${UNIPAY_PORT:-3000}:3000"
     environment:
       HOST: 0.0.0.0
       PORT: 3000
-      LOG_LEVEL: info
-      # Set this in a .env file for shared environments; blank means local demo mode.
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       UNIPAY_API_KEY: ${UNIPAY_API_KEY:-}
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-memory}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-100}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped

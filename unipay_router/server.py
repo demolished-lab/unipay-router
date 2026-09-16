@@ -7,12 +7,42 @@ and durable storage in front of it.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .api import UniPayAPI
+from .rate_limiter import RateLimitDecision, build_rate_limiter
+
+
+class JsonLogFormatter(logging.Formatter):
+    """Format access and application records as one JSON object per line."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
+            "level": record.levelname.lower(),
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        for key in ("request_id", "trace_id", "method", "path", "status", "duration_ms", "client_ip"):
+            if hasattr(record, key):
+                payload[key] = getattr(record, key)
+        return json.dumps(payload, separators=(",", ":"))
+
+
+logger = logging.getLogger("unipay_router")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonLogFormatter())
+    logger.addHandler(handler)
+configured_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logger.setLevel(logging.CRITICAL + 1 if configured_level == "QUIET" else configured_level)
+logger.propagate = False
 
 
 class UniPayHTTPServer(ThreadingHTTPServer):
@@ -23,6 +53,7 @@ class UniPayHTTPServer(ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], api: UniPayAPI | None = None):
         self.api = api or UniPayAPI()
+        self.rate_limiter = build_rate_limiter()
         super().__init__(address, UniPayRequestHandler)
 
 
@@ -31,8 +62,32 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
-        if os.getenv("LOG_LEVEL", "info").lower() != "quiet":
-            super().log_message(format, *args)
+        # Access records are emitted by _send as structured JSON.
+        return
+
+    def _request_context(self) -> bool:
+        self._request_started = time.perf_counter()
+        incoming = self.headers.get("X-Request-ID", "").strip()
+        self.request_id = self._safe_trace_id(incoming) or str(uuid.uuid4())
+        self.trace_id = self._safe_trace_id(self.headers.get("X-Trace-ID", "")) or self.request_id
+        forwarded = self.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+        self.client_ip = forwarded or self.client_address[0]
+        api_key = self.headers.get("X-API-Key", "")
+        decision = self.server.rate_limiter.check(api_key or self.client_ip)
+        self._rate_limit = decision
+        if not decision.allowed:
+            self._send(429, {"error": "rate limit exceeded", "retry_after": decision.retry_after})
+            return False
+        return True
+
+    @staticmethod
+    def _safe_trace_id(value: str) -> str:
+        value = value[:128]
+        return value if value and re.fullmatch(r"[A-Za-z0-9._:-]+", value) else ""
+
+    def _authorized(self) -> bool:
+        expected = os.getenv("UNIPAY_API_KEY", "").strip()
+        return not expected or self.headers.get("X-API-Key", "") == expected
 
     def _send(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -42,8 +97,29 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", os.getenv("CORS_ORIGIN", "*"))
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("X-Request-ID", getattr(self, "request_id", str(uuid.uuid4())))
+        self.send_header("X-Trace-ID", getattr(self, "trace_id", getattr(self, "request_id", "")))
+        decision: RateLimitDecision | None = getattr(self, "_rate_limit", None)
+        if decision:
+            self.send_header("X-RateLimit-Limit", str(decision.limit))
+            self.send_header("X-RateLimit-Remaining", str(decision.remaining))
+            self.send_header("X-RateLimit-Reset", str(decision.reset_at))
+            if status == 429:
+                self.send_header("Retry-After", str(decision.retry_after))
         self.end_headers()
         self.wfile.write(body)
+        logger.info(
+            "http_request",
+            extra={
+                "request_id": getattr(self, "request_id", ""),
+                "trace_id": getattr(self, "trace_id", ""),
+                "method": self.command,
+                "path": urlparse(self.path).path,
+                "status": status,
+                "duration_ms": round((time.perf_counter() - getattr(self, "_request_started", time.perf_counter())) * 1000, 2),
+                "client_ip": getattr(self, "client_ip", ""),
+            },
+        )
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
@@ -55,14 +131,14 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
             raise ValueError("JSON body must be an object")
         return value
 
-    def _authorized(self) -> bool:
-        expected = os.getenv("UNIPAY_API_KEY", "").strip()
-        return not expected or self.headers.get("X-API-Key", "") == expected
-
     def do_OPTIONS(self) -> None:
+        if not self._request_context():
+            return
         self._send(204, {})
 
     def do_GET(self) -> None:
+        if not self._request_context():
+            return
         if not self._authorized():
             self._send(401, {"error": "invalid or missing API key"})
             return
@@ -100,6 +176,8 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self) -> None:
+        if not self._request_context():
+            return
         if not self._authorized():
             self._send(401, {"error": "invalid or missing API key"})
             return

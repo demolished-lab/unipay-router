@@ -24,6 +24,7 @@ All documentation for the Universal Payment Router.
 - [Free Hosting Quickstart](../FREE-HOSTING.md) — Deploy on Render Free or Vercel Functions
 - [Load Testing](../LOAD-TESTING.md) — Locust workloads and benchmark guidance
 - [Async End-to-End Tests](../tests/test_e2e_async.py) — pytest-asyncio and httpx API workflow coverage
+- [Operations](../OPERATIONS.md) — Rate limiting, tracing, JSON logs, Docker, and Compose
 - [Security](SECURITY.md) — PCI compliance, API keys, and best practices
 
 ## Development
