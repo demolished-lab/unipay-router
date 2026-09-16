@@ -1,0 +1,33 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '$SMTP_SMARTHOST'
+  smtp_from: '$SMTP_FROM'
+  smtp_auth_username: '$SMTP_USERNAME'
+  smtp_auth_password: '$SMTP_PASSWORD'
+
+route:
+  receiver: unipay-ops
+  group_by: [alertname, service, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: unipay-critical
+
+receivers:
+  - name: unipay-ops
+    email_configs:
+      - to: '$ALERT_EMAIL_TO'
+        send_resolved: true
+    webhook_configs:
+      - url: '$ALERT_WEBHOOK_URL'
+        send_resolved: true
+
+  - name: unipay-critical
+    email_configs:
+      - to: '$ALERT_CRITICAL_EMAIL_TO'
+        send_resolved: true
+    webhook_configs:
+      - url: '$ALERT_CRITICAL_WEBHOOK_URL'
+        send_resolved: true

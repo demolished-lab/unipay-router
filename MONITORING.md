@@ -1,5 +1,60 @@
 # Proxy and Monitoring
 
+## Alerting and notifications
+
+Prometheus now loads [alert rules](monitoring/prometheus/alerts.yml) for
+availability, 5xx/4xx error rates, p95 latency, and rate-limit saturation. It
+sends firing and resolved alerts to the optional Alertmanager service.
+
+Configure notification channels with environment variables:
+
+```bash
+ALERT_EMAIL_TO='ops@example.com'
+ALERT_CRITICAL_EMAIL_TO='oncall@example.com'
+ALERT_WEBHOOK_URL='https://hooks.example.com/unipay'
+ALERT_CRITICAL_WEBHOOK_URL='https://hooks.example.com/unipay-critical'
+SMTP_SMARTHOST='smtp.example.com:587'
+SMTP_FROM='unipay-alerts@example.com'
+SMTP_USERNAME='smtp-user'
+SMTP_PASSWORD='smtp-password'
+```
+
+The default file contains safe placeholder destinations. Replace them before
+using email or webhook delivery. Alertmanager is available at
+`http://localhost:9093` in the local monitoring profile.
+
+The Alertmanager configuration is in
+`monitoring/alertmanager/alertmanager.yml`.
+
+## Distributed tracing with OpenTelemetry and Jaeger
+
+Tracing is optional and disabled by default so the zero-cost simulator remains
+dependency-free. Install the tracing extra and enable OTLP export:
+
+```bash
+pip install -e '.[tracing]'
+export OTEL_ENABLED=true
+export OTEL_SERVICE_NAME=unipay-router
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
+python -m unipay_router.server
+```
+
+The HTTP server creates spans for incoming requests, extracts W3C propagation
+headers when supplied, and exports spans to Jaeger over OTLP/HTTP. With Compose,
+start the Jaeger profile together with the router:
+
+```bash
+OTEL_ENABLED=true \
+docker compose --profile tracing up --build
+```
+
+Jaeger’s UI is available at `http://localhost:16686`. The Compose service also
+exposes OTLP/HTTP on port 4318 and OTLP/gRPC on port 4317. Set
+`OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces` inside Compose.
+
+Tracing is best-effort: if the optional OpenTelemetry packages are not
+installed, the application automatically falls back to no-op spans.
+
 ## Nginx reverse proxy with SSL termination
 
 The repository includes an optional Nginx profile. Nginx listens on ports 80 and

@@ -13,10 +13,16 @@ services:
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-100}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-unipay-router}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     restart: unless-stopped
     depends_on:
       redis:
         condition: service_healthy
+        required: false
+      jaeger:
+        condition: service_started
         required: false
 
   redis:
@@ -50,12 +56,48 @@ services:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
     depends_on:
       - unipay-router
+      - alertmanager
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: ["monitoring"]
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    environment:
+      SMTP_SMARTHOST: ${SMTP_SMARTHOST:-localhost:25}
+      SMTP_FROM: ${SMTP_FROM:-unipay-alerts@example.com}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-ops@example.com}
+      ALERT_CRITICAL_EMAIL_TO: ${ALERT_CRITICAL_EMAIL_TO:-ops@example.com}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-http://host.docker.internal:8080/alerts}
+      ALERT_CRITICAL_WEBHOOK_URL: ${ALERT_CRITICAL_WEBHOOK_URL:-http://host.docker.internal:8080/critical-alerts}
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --config.expand-env
+      - --storage.path=/alertmanager
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    profiles: ["tracing"]
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
+      - "${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
     restart: unless-stopped
 
   grafana:
@@ -77,4 +119,5 @@ services:
 
 volumes:
   prometheus_data:
+  alertmanager_data:
   grafana_data:

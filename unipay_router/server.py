@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .api import UniPayAPI
 from .metrics import MetricsRegistry
 from .rate_limiter import RateLimitDecision, build_rate_limiter
+from .tracing import Tracing
 
 
 class JsonLogFormatter(logging.Formatter):
@@ -56,6 +57,7 @@ class UniPayHTTPServer(ThreadingHTTPServer):
         self.api = api or UniPayAPI()
         self.rate_limiter = build_rate_limiter()
         self.metrics = MetricsRegistry()
+        self.tracing = Tracing()
         super().__init__(address, UniPayRequestHandler)
 
 
@@ -70,6 +72,10 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
     def _request_context(self) -> bool:
         self._request_started = time.perf_counter()
         self.server.metrics.begin()
+        self._span_context = self.server.tracing.start_span(
+            f"{self.command} {urlparse(self.path).path}", dict(self.headers)
+        )
+        self._span = self._span_context.__enter__()
         incoming = self.headers.get("X-Request-ID", "").strip()
         self.request_id = self._safe_trace_id(incoming) or str(uuid.uuid4())
         self.trace_id = self._safe_trace_id(self.headers.get("X-Trace-ID", "")) or self.request_id
@@ -125,6 +131,16 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
                 "client_ip": getattr(self, "client_ip", ""),
             },
         )
+        self._finish_span(status)
+
+    def _finish_span(self, status: int) -> None:
+        span = getattr(self, "_span", None)
+        if span is not None:
+            span.set_attribute("http.request.method", self.command)
+            span.set_attribute("http.response.status_code", status)
+            span.set_attribute("url.path", urlparse(self.path).path)
+            self._span_context.__exit__(None, None, None)
+            self._span = None
 
     def _send_metrics(self) -> None:
         body = self.server.metrics.render().encode("utf-8")
@@ -141,6 +157,7 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
             200,
             time.perf_counter() - getattr(self, "_request_started", time.perf_counter()),
         )
+        self._finish_span(200)
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))

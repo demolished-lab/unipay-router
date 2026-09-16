@@ -1,0 +1,52 @@
+groups:
+  - name: unipay-router
+    rules:
+      - alert: UniPayRouterDown
+        expr: up{job="unipay-router"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: unipay-router
+        annotations:
+          summary: UniPay Router is unavailable
+          description: Prometheus cannot scrape the UniPay Router metrics endpoint.
+
+      - alert: UniPayHighErrorRate
+        expr: sum(rate(unipay_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(unipay_http_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: unipay-router
+        annotations:
+          summary: UniPay Router server error rate is above 5%
+          description: More than 5% of requests returned HTTP 5xx for five minutes.
+
+      - alert: UniPayHighClientErrorRate
+        expr: sum(rate(unipay_http_requests_total{status=~"4.."}[5m])) / clamp_min(sum(rate(unipay_http_requests_total[5m])), 0.001) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+          service: unipay-router
+        annotations:
+          summary: UniPay Router client error rate is elevated
+          description: More than 25% of requests returned HTTP 4xx for ten minutes.
+
+      - alert: UniPayHighP95Latency
+        expr: histogram_quantile(0.95, sum(rate(unipay_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: unipay-router
+        annotations:
+          summary: UniPay Router p95 latency exceeds one second
+          description: The global p95 HTTP latency has exceeded one second for ten minutes.
+
+      - alert: UniPayRateLimitSaturation
+        expr: sum(rate(unipay_http_requests_total{status="429"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: unipay-router
+        annotations:
+          summary: UniPay Router is returning rate-limit responses
+          description: More than one HTTP 429 per second has been observed for ten minutes.
