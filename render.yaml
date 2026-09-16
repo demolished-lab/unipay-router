@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: unipay-router
+    runtime: python
+    plan: free
+    buildCommand: pip install -e .
+    startCommand: python -m unipay_router.server
+    healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: UNIPAY_API_KEY
+        sync: false

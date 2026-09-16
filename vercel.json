@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "build": {"env": {"PYTHON_VERSION": "3.12"}},
+  "functions": {
+    "vercel_app.py": {
+      "excludeFiles": "{tests/**,postman/**,docs/**,*.md,config/**}"
+    }
+  },
+  "rewrites": [{"source": "/(.*)", "destination": "/vercel_app.py"}]
+}

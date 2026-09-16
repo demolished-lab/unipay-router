@@ -1,0 +1,63 @@
+{
+  "info": {
+    "name": "UniPay Router API",
+    "_postman_id": "a4f6d2c8-6b3f-4b85-9f7d-0a3d2e7f8c11",
+    "description": "End-to-end local and hosted tests for the zero-cost UniPay Router MVP. Requests use collection variables and are safe for simulator mode.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:3000"},
+    {"key": "api_key", "value": ""},
+    {"key": "receiver_id", "value": "postman_receiver"},
+    {"key": "receiver_handle", "value": "postman@unipay"},
+    {"key": "payment_intent_id", "value": ""},
+    {"key": "webhook_provider", "value": "razorpay"}
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {"key": "value", "value": "{{api_key}}", "type": "string"},
+      {"key": "key", "value": "X-API-Key", "type": "string"},
+      {"key": "in", "value": "header", "type": "string"}
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {"name": "Health check", "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"]}}}
+      ]
+    },
+    {
+      "name": "Receivers",
+      "item": [
+        {"name": "Create or update receiver", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"receiver_id\": \"{{receiver_id}}\",\n  \"handle\": \"{{receiver_handle}}\",\n  \"country\": \"IN\",\n  \"currency\": \"INR\",\n  \"preferred_methods\": [\"upi\"],\n  \"max_fee_percentage\": 1.0,\n  \"max_fee_absolute\": 100.0,\n  \"settlement_speed\": \"instant\"\n}"}, "url": {"raw": "{{base_url}}/v1/receiver-preferences", "host": ["{{base_url}}"], "path": ["v1", "receiver-preferences"]}}},
+        {"name": "Resolve receiver handle", "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/v1/resolve/{{receiver_handle}}", "host": ["{{base_url}}"], "path": ["v1", "resolve", "{{receiver_handle}}"]}}}
+      ]
+    },
+    {
+      "name": "Payment intents",
+      "item": [
+        {"name": "Create payment intent", "event": [{"listen": "test", "script": {"exec": ["const body = pm.response.json();", "pm.test('payment intent created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));", "pm.expect(body.id).to.be.a('string');", "pm.collectionVariables.set('payment_intent_id', body.id);"]}}], "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"amount\": 1000,\n  \"currency\": \"INR\",\n  \"receiver_handle\": \"{{receiver_handle}}\",\n  \"sender\": {\"country\": \"IN\", \"preferred_methods\": [\"upi\"]}\n}"}, "url": {"raw": "{{base_url}}/v1/payment-intents", "host": ["{{base_url}}"], "path": ["v1", "payment-intents"]}}},
+        {"name": "Get payment intent", "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/v1/payment-intents/{{payment_intent_id}}", "host": ["{{base_url}}"], "path": ["v1", "payment-intents", "{{payment_intent_id}}"]}}},
+        {"name": "Confirm payment intent (simulation)", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": {"raw": "{{base_url}}/v1/payment-intents/{{payment_intent_id}}/confirm", "host": ["{{base_url}}"], "path": ["v1", "payment-intents", "{{payment_intent_id}}", "confirm"]}}, "event": [{"listen": "test", "script": {"exec": ["const body = pm.response.json();", "pm.test('simulated confirmation', () => pm.expect(body.simulated).to.eql(true));", "pm.expect(body.state).to.eql('settled');"]}}]}
+      ]
+    },
+    {
+      "name": "Routes and FX",
+      "item": [
+        {"name": "List available routes", "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/v1/routes?amount=1000&currency=INR&receiver_handle={{receiver_handle}}", "host": ["{{base_url}}"], "path": ["v1", "routes"], "query": [{"key": "amount", "value": "1000"}, {"key": "currency", "value": "INR"}, {"key": "receiver_handle", "value": "{{receiver_handle}}"}]}}},
+        {"name": "Get FX rate", "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/v1/fx-rate?from=USD&to=INR", "host": ["{{base_url}}"], "path": ["v1", "fx-rate"], "query": [{"key": "from", "value": "USD"}, {"key": "to", "value": "INR"}]}}},
+        {"name": "Get payment graph stats", "request": {"method": "GET", "header": [], "url": {"raw": "{{base_url}}/v1/graph/stats", "host": ["{{base_url}}", "v1"], "path": ["v1", "graph", "stats"]}}}
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {"name": "Razorpay normalized fixture", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"event\": \"payment.captured\",\n  \"payload\": {\"payment\": {\"entity\": {\"id\": \"pay_postman_123\", \"amount\": 1000, \"currency\": \"INR\", \"status\": \"captured\"}}}\n}"}, "url": {"raw": "{{base_url}}/v1/webhooks/razorpay", "host": ["{{base_url}}"], "path": ["v1", "webhooks", "razorpay"]}}},
+        {"name": "Cashfree normalized fixture", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"type\": \"PAYMENT_SUCCESS\",\n  \"data\": {\"order\": {\"order_id\": \"order_postman_123\", \"order_amount\": 1000, \"order_currency\": \"INR\"}, \"payment\": {\"cf_payment_id\": \"cf_pay_postman_123\", \"payment_status\": \"SUCCESS\"}}\n}"}, "url": {"raw": "{{base_url}}/v1/webhooks/cashfree", "host": ["{{base_url}}"], "path": ["v1", "webhooks", "cashfree"]}}},
+        {"name": "PayU normalized fixture", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"status\": \"success\",\n  \"transaction_details\": {\"mihpayid\": \"payu_postman_123\", \"amount\": \"1000\", \"currency\": \"INR\"}\n}"}, "url": {"raw": "{{base_url}}/v1/webhooks/payu", "host": ["{{base_url}}"], "path": ["v1", "webhooks", "payu"]}}}
+      ]
+    }
+  ]
+}

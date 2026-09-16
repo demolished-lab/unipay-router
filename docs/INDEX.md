@@ -7,6 +7,7 @@ All documentation for the Universal Payment Router.
 - [README](README.md) — Project overview and quick start
 - [Architecture](ARCHITECTURE.md) — System design, data flow, and component diagrams
 - [API Reference](API.md) — REST API endpoints and examples
+- [Postman Collection](../postman/UniPay-Router.postman_collection.json) — Importable requests for all API endpoints
 
 ## Components
 
@@ -18,6 +19,7 @@ All documentation for the Universal Payment Router.
 ## Operations
 
 - [Deployment](DEPLOYMENT.md) — Docker, cloud, and local setup
+- [Free Hosting Quickstart](../FREE-HOSTING.md) — Deploy on Render Free or Vercel Functions
 - [Security](SECURITY.md) — PCI compliance, API keys, and best practices
 
 ## Development
