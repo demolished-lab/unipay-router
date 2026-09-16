@@ -8,6 +8,7 @@ All documentation for the Universal Payment Router.
 - [Architecture](ARCHITECTURE.md) — System design, data flow, and component diagrams
 - [API Reference](API.md) — REST API endpoints and examples
 - [Postman Collection](../postman/UniPay-Router.postman_collection.json) — Importable requests for all API endpoints
+- [OpenAPI Specification](../openapi/openapi.json) — OpenAPI 3.1 schema for Swagger and client generation
 
 ## Components
 
@@ -20,6 +21,7 @@ All documentation for the Universal Payment Router.
 
 - [Deployment](DEPLOYMENT.md) — Docker, cloud, and local setup
 - [Free Hosting Quickstart](../FREE-HOSTING.md) — Deploy on Render Free or Vercel Functions
+- [Load Testing](../LOAD-TESTING.md) — Locust workloads and benchmark guidance
 - [Security](SECURITY.md) — PCI compliance, API keys, and best practices
 
 ## Development

@@ -35,6 +35,9 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.1.0",
 ]
+loadtest = [
+    "locust>=2.31.0",
+]
 
 [project.scripts]
 unipay = "unipay_router.cli:main"

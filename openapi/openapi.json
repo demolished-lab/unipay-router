@@ -1,0 +1,108 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UniPay Router API",
+    "version": "0.1.0",
+    "description": "Universal payment routing API. The current implementation is a zero-cost local simulator and does not move real money.",
+    "license": {"name": "Apache-2.0", "identifier": "Apache-2.0"}
+  },
+  "servers": [{"url": "http://localhost:3000", "description": "Local development"}],
+  "security": [{"ApiKeyAuth": []}],
+  "tags": [
+    {"name": "Health"},
+    {"name": "Receivers"},
+    {"name": "Payment Intents"},
+    {"name": "Routes and FX"},
+    {"name": "Webhooks"},
+    {"name": "Graph"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {"tags": ["Health"], "summary": "Health check", "responses": {"200": {"description": "Service health", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Health"}}}}}}
+    },
+    "/v1/receiver-preferences": {
+      "post": {
+        "tags": ["Receivers"], "summary": "Create or update receiver preferences",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReceiverPreferenceRequest"}}}},
+        "responses": {"200": {"description": "Receiver saved", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReceiverPreferenceResponse"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}}
+      }
+    },
+    "/v1/resolve/{handle}": {
+      "get": {
+        "tags": ["Receivers"], "summary": "Resolve a payment handle", "parameters": [{"$ref": "#/components/parameters/Handle"}],
+        "responses": {"200": {"description": "Resolved preferences", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReceiverPreference"}}}}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/v1/payment-intents": {
+      "post": {
+        "tags": ["Payment Intents"], "summary": "Create a payment intent and select a route",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PaymentIntentRequest"}}}},
+        "responses": {"200": {"description": "Payment intent created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PaymentIntentCreated"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}}
+      }
+    },
+    "/v1/payment-intents/{id}": {
+      "get": {
+        "tags": ["Payment Intents"], "summary": "Get a payment intent", "parameters": [{"$ref": "#/components/parameters/PaymentId"}],
+        "responses": {"200": {"description": "Payment intent", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PaymentIntentStatus"}}}}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/v1/payment-intents/{id}/confirm": {
+      "post": {
+        "tags": ["Payment Intents"], "summary": "Confirm a payment intent in the local simulator", "description": "Advances the intent to settled with simulated=true. Does not contact a bank or provider.", "parameters": [{"$ref": "#/components/parameters/PaymentId"}],
+        "requestBody": {"required": false, "content": {"application/json": {"schema": {"type": "object"}}}},
+        "responses": {"200": {"description": "Simulated settlement", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PaymentIntentStatus"}}}}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/v1/routes": {
+      "get": {
+        "tags": ["Routes and FX"], "summary": "List available routes", "parameters": [
+          {"name": "amount", "in": "query", "required": true, "schema": {"type": "number", "exclusiveMinimum": 0}},
+          {"name": "currency", "in": "query", "required": true, "schema": {"$ref": "#/components/schemas/Currency"}},
+          {"name": "receiver_handle", "in": "query", "required": false, "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "Ranked routes", "content": {"application/json": {"schema": {"type": "object", "required": ["routes", "count"], "properties": {"routes": {"type": "array", "items": {"$ref": "#/components/schemas/Route"}}, "count": {"type": "integer"}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}}
+      }
+    },
+    "/v1/fx-rate": {
+      "get": {
+        "tags": ["Routes and FX"], "summary": "Get an FX rate", "parameters": [{"name": "from", "in": "query", "required": true, "schema": {"$ref": "#/components/schemas/Currency"}}, {"name": "to", "in": "query", "required": true, "schema": {"$ref": "#/components/schemas/Currency"}}],
+        "responses": {"200": {"description": "FX rate", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FxRate"}}}}}
+      }
+    },
+    "/v1/graph/stats": {
+      "get": {"tags": ["Graph"], "summary": "Get payment graph statistics", "responses": {"200": {"description": "Graph statistics", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GraphStats"}}}}}}
+    },
+    "/v1/webhooks/{provider}": {
+      "post": {
+        "tags": ["Webhooks"], "summary": "Normalize a provider webhook", "description": "Accepts a provider-shaped JSON payload and returns a normalized event. Configure provider secrets for signature verification.", "parameters": [{"name": "provider", "in": "path", "required": true, "schema": {"type": "string", "enum": ["razorpay", "cashfree", "payu"]}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object"}}}},
+        "responses": {"200": {"description": "Normalized webhook", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WebhookResponse"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}}
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {"ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key", "description": "Optional for local mode; required when UNIPAY_API_KEY is configured."}},
+    "parameters": {
+      "Handle": {"name": "handle", "in": "path", "required": true, "schema": {"type": "string", "example": "bob@unipay"}},
+      "PaymentId": {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+    },
+    "responses": {"BadRequest": {"description": "Invalid request", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "NotFound": {"description": "Resource not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+    "schemas": {
+      "Currency": {"type": "string", "enum": ["INR", "USD", "EUR", "GBP", "SGD", "AED", "NPR", "BDT", "LKR"]},
+      "PaymentMethod": {"type": "string", "enum": ["upi", "visa", "mastercard", "rupay", "net_banking", "bank_transfer", "wallet", "paypal", "crypto"]},
+      "SettlementSpeed": {"type": "string", "enum": ["instant", "real_time", "t+1", "t+2", "t+3", "weekly"]},
+      "PaymentIntentRequest": {"type": "object", "required": ["amount", "currency", "receiver_handle"], "properties": {"amount": {"type": "number", "exclusiveMinimum": 0, "example": 1000}, "currency": {"$ref": "#/components/schemas/Currency"}, "receiver_handle": {"type": "string", "example": "bob@unipay"}, "sender": {"type": "object", "properties": {"country": {"type": "string", "default": "IN"}, "preferred_methods": {"type": "array", "items": {"$ref": "#/components/schemas/PaymentMethod"}}}}}},
+      "ReceiverPreferenceRequest": {"type": "object", "required": ["receiver_id", "handle"], "properties": {"receiver_id": {"type": "string"}, "handle": {"type": "string", "example": "bob@unipay"}, "country": {"type": "string", "default": "IN"}, "currency": {"$ref": "#/components/schemas/Currency"}, "preferred_methods": {"type": "array", "items": {"$ref": "#/components/schemas/PaymentMethod"}}, "rejected_methods": {"type": "array", "items": {"$ref": "#/components/schemas/PaymentMethod"}}, "max_fee_percentage": {"type": "number", "minimum": 0}, "max_fee_absolute": {"type": "number", "minimum": 0}, "settlement_speed": {"$ref": "#/components/schemas/SettlementSpeed"}}},
+      "ReceiverPreferenceResponse": {"type": "object", "required": ["handle", "receiver_id"], "properties": {"handle": {"type": "string"}, "receiver_id": {"type": "string"}}},
+      "ReceiverPreference": {"allOf": [{"$ref": "#/components/schemas/ReceiverPreferenceResponse"}, {"type": "object", "properties": {"country": {"type": "string"}, "currency": {"$ref": "#/components/schemas/Currency"}, "preferred_methods": {"type": "array", "items": {"$ref": "#/components/schemas/PaymentMethod"}}, "rejected_methods": {"type": "array", "items": {"$ref": "#/components/schemas/PaymentMethod"}}, "max_fee_percentage": {"type": "number"}, "max_fee_absolute": {"type": "number"}, "settlement_speed_preference": {"$ref": "#/components/schemas/SettlementSpeed"}}}]},
+      "Route": {"type": "object", "properties": {"payer_method": {"$ref": "#/components/schemas/PaymentMethod"}, "settlement_method": {"$ref": "#/components/schemas/PaymentMethod"}, "provider": {"type": "string"}, "amount": {"type": "number"}, "currency": {"$ref": "#/components/schemas/Currency"}, "fee": {"type": "number"}, "fx_cost": {"type": "number"}, "net_received": {"type": "number"}, "success_probability": {"type": "number"}, "settlement_speed": {"$ref": "#/components/schemas/SettlementSpeed"}, "score": {"type": "number"}}},
+      "PaymentIntentCreated": {"type": "object", "required": ["id", "amount", "currency", "route", "alternatives"], "properties": {"id": {"type": "string"}, "amount": {"type": "number"}, "currency": {"$ref": "#/components/schemas/Currency"}, "route": {"$ref": "#/components/schemas/Route"}, "alternatives": {"type": "array", "items": {"$ref": "#/components/schemas/Route"}}}},
+      "PaymentIntentStatus": {"type": "object", "required": ["id", "amount", "currency", "state"], "properties": {"id": {"type": "string"}, "amount": {"type": "number"}, "currency": {"$ref": "#/components/schemas/Currency"}, "state": {"type": "string"}, "selected_route": {"anyOf": [{"$ref": "#/components/schemas/Route"}, {"type": "null"}]}, "simulated": {"type": "boolean"}}},
+      "FxRate": {"type": "object", "required": ["from", "to", "rate", "spread", "source"], "properties": {"from": {"$ref": "#/components/schemas/Currency"}, "to": {"$ref": "#/components/schemas/Currency"}, "rate": {"type": "number"}, "spread": {"type": "number"}, "source": {"type": "string"}}},
+      "WebhookResponse": {"type": "object", "required": ["event", "payment_id", "provider", "status"], "properties": {"event": {"type": "string"}, "payment_id": {"type": "string"}, "provider": {"type": "string"}, "status": {"type": ["string", "null"]}}},
+      "GraphStats": {"type": "object", "properties": {"total_nodes": {"type": "integer"}, "total_edges": {"type": "integer"}, "node_types": {"type": "object", "additionalProperties": {"type": "integer"}}, "edge_types": {"type": "object", "additionalProperties": {"type": "integer"}}}},
+      "Health": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string"}, "providers": {"type": "integer"}, "receivers": {"type": "integer"}, "payment_intents": {"type": "integer"}, "graph_nodes": {"type": "integer"}, "graph_edges": {"type": "integer"}}},
+      "Error": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}}
+    }
+  }
+}
