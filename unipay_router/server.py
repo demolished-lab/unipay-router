@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .api import UniPayAPI
+from .metrics import MetricsRegistry
 from .rate_limiter import RateLimitDecision, build_rate_limiter
 
 
@@ -54,6 +55,7 @@ class UniPayHTTPServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], api: UniPayAPI | None = None):
         self.api = api or UniPayAPI()
         self.rate_limiter = build_rate_limiter()
+        self.metrics = MetricsRegistry()
         super().__init__(address, UniPayRequestHandler)
 
 
@@ -67,6 +69,7 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
 
     def _request_context(self) -> bool:
         self._request_started = time.perf_counter()
+        self.server.metrics.begin()
         incoming = self.headers.get("X-Request-ID", "").strip()
         self.request_id = self._safe_trace_id(incoming) or str(uuid.uuid4())
         self.trace_id = self._safe_trace_id(self.headers.get("X-Trace-ID", "")) or self.request_id
@@ -108,6 +111,8 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
                 self.send_header("Retry-After", str(decision.retry_after))
         self.end_headers()
         self.wfile.write(body)
+        duration_seconds = time.perf_counter() - getattr(self, "_request_started", time.perf_counter())
+        self.server.metrics.observe(self.command, urlparse(self.path).path, status, duration_seconds)
         logger.info(
             "http_request",
             extra={
@@ -119,6 +124,22 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
                 "duration_ms": round((time.perf_counter() - getattr(self, "_request_started", time.perf_counter())) * 1000, 2),
                 "client_ip": getattr(self, "client_ip", ""),
             },
+        )
+
+    def _send_metrics(self) -> None:
+        body = self.server.metrics.render().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Request-ID", self.request_id)
+        self.send_header("X-Trace-ID", self.trace_id)
+        self.end_headers()
+        self.wfile.write(body)
+        self.server.metrics.observe(
+            self.command,
+            "/metrics",
+            200,
+            time.perf_counter() - getattr(self, "_request_started", time.perf_counter()),
         )
 
     def _read_json(self) -> dict:
@@ -144,6 +165,13 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
+        if path == "/metrics":
+            metrics_key = os.getenv("METRICS_API_KEY", "").strip()
+            if metrics_key and self.headers.get("X-API-Key", "") != metrics_key:
+                self._send(401, {"error": "invalid or missing metrics API key"})
+                return
+            self._send_metrics()
+            return
         if path in ("", "/health"):
             self._send(200, self.server.api.health_check())
             return

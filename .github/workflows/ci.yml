@@ -44,6 +44,7 @@ jobs:
           python -m json.tool openapi/openapi.json >/dev/null
           python -m json.tool vercel.json >/dev/null
           python -m json.tool postman/UniPay-Router.postman_collection.json >/dev/null
+          python -m json.tool monitoring/grafana/dashboards/unipay-router.json >/dev/null
 
       - name: Check repository whitespace
         run: git diff --check

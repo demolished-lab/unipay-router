@@ -29,3 +29,7 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local TLS material
+infra/nginx/certs/*.pem
+!infra/nginx/certs/.gitkeep

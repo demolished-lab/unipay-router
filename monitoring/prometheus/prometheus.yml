@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: unipay-router
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["unipay-router:3000"]
+    # If METRICS_API_KEY is configured, use a mounted bearer/basic-auth setup
+    # or place Prometheus on the trusted internal network and leave it unset.

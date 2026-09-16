@@ -1,0 +1,22 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"title": "Requests per second", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "sum(rate(unipay_http_requests_total[5m]))", "legendFormat": "RPS"}], "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}},
+    {"title": "Error rate", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "sum(rate(unipay_http_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(unipay_http_requests_total[5m]))", "legendFormat": "errors"}], "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []}},
+    {"title": "P95 request latency", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "targets": [{"expr": "histogram_quantile(0.95, sum(rate(unipay_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}], "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}},
+    {"title": "Requests by route and status", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "targets": [{"expr": "sum(rate(unipay_http_requests_total[5m])) by (path,status)", "legendFormat": "{{path}} {{status}}"}], "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}},
+    {"title": "In-flight requests", "type": "stat", "gridPos": {"h": 5, "w": 8, "x": 0, "y": 16}, "targets": [{"expr": "unipay_http_in_flight_requests", "legendFormat": "in flight"}], "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}},
+    {"title": "Total requests", "type": "stat", "gridPos": {"h": 5, "w": 8, "x": 8, "y": 16}, "targets": [{"expr": "sum(unipay_http_requests_total)", "legendFormat": "requests"}], "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}},
+    {"title": "Rate-limited requests", "type": "stat", "gridPos": {"h": 5, "w": 8, "x": 16, "y": 16}, "targets": [{"expr": "sum(unipay_http_requests_total{status=\"429\"})", "legendFormat": "429s"}], "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}}
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["unipay", "payments", "api"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "UniPay Router Overview",
+  "uid": "unipay-router",
+  "version": 1
+}
