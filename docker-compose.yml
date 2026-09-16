@@ -1,83 +1,12 @@
-version: "3.8"
-
 services:
-  # ── Hyperswitch Core ──────────────────────────────────────────────────────
-
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: hyperswitch_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  hyperswitch-server:
-    image: juspay/hyperswitch:latest
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/hyperswitch_db
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    volumes:
-      - ./config/hyperswitch.toml:/etc/hyperswitch/config.toml
-
-  hyperswitch-control-center:
-    image: juspay/hyperswitch-control-center:latest
-    ports:
-      - "9000:9000"
-    depends_on:
-      - hyperswitch-server
-    environment:
-      SERVER_HOST: hyperswitch-server
-      SERVER_PORT: 8080
-
-  # ── UniPay Router ──────────────────────────────────────────────────────────
-
   unipay-router:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     ports:
       - "3000:3000"
-    depends_on:
-      hyperswitch-server:
-        condition: service_started
     environment:
-      HYPERSWITCH_URL: http://hyperswitch-server:8080
-      HYPERSWITCH_API_KEY: test_api_key
-      RAZORPAY_API_KEY: rzp_test_XXXXX
-      RAZORPAY_SECRET: YOUR_SECRET
-      CASHFREE_APP_ID: TEST_XXXXX
-      CASHFREE_SECRET: YOUR_SECRET
-      FX_API_URL: https://api.exchangerate-api.com/v4/latest/
+      HOST: 0.0.0.0
+      PORT: 3000
       LOG_LEVEL: info
-
-volumes:
-  pg_data:
-  redis_data:
+      # Set this in a .env file for shared environments; blank means local demo mode.
+      UNIPAY_API_KEY: ${UNIPAY_API_KEY:-}
+    restart: unless-stopped

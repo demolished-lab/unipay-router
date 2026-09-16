@@ -13,6 +13,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import math
 import uuid
 
 try:
@@ -70,6 +71,18 @@ class UniPayAPI:
         currency_str = request.get("currency", "INR")
         receiver_handle = request.get("receiver_handle", "")
         sender_data = request.get("sender", {})
+
+        if (
+            not isinstance(amount, (int, float))
+            or isinstance(amount, bool)
+            or not math.isfinite(amount)
+            or amount <= 0
+        ):
+            return {"error": "amount must be a positive finite number"}
+        if not isinstance(receiver_handle, str) or not receiver_handle.strip():
+            return {"error": "receiver_handle is required"}
+        if not isinstance(sender_data, dict):
+            return {"error": "sender must be an object"}
 
         try:
             currency = Currency(currency_str)
@@ -130,6 +143,27 @@ class UniPayAPI:
             "alternatives": [self._route_to_dict(r) for r in routes[1:]],
         }
 
+    def confirm_payment_intent(self, payment_id: str) -> dict:
+        """Complete a deterministic local-only payment simulation."""
+        intent = self._payment_intents.get(payment_id)
+        if not intent:
+            return {"error": "Payment intent not found"}
+        if intent.state.value == "settled":
+            return self.get_payment_intent(payment_id) | {"simulated": True}
+        if intent.state.value != "created":
+            return {"error": f"Payment intent cannot be confirmed from state: {intent.state.value}"}
+        from .models import TransactionState
+        for state in (
+            TransactionState.ROUTE_SELECTED,
+            TransactionState.PAYMENT_INITIATED,
+            TransactionState.PAYMENT_PROCESSING,
+            TransactionState.PAYMENT_SUCCESS,
+            TransactionState.SETTLEMENT_PENDING,
+            TransactionState.SETTLED,
+        ):
+            intent.state = state
+        return self.get_payment_intent(payment_id) | {"simulated": True}
+
     def get_payment_intent(self, payment_id: str) -> dict:
         """Get payment intent details."""
         intent = self._payment_intents.get(payment_id)
@@ -151,6 +185,11 @@ class UniPayAPI:
         handle = request.get("handle", f"{receiver_id}@unipay")
         country = request.get("country", "IN")
         currency_str = request.get("currency", "INR")
+
+        if not isinstance(receiver_id, str) or not receiver_id.strip():
+            return {"error": "receiver_id is required"}
+        if not isinstance(handle, str) or not handle.strip() or "@" not in handle:
+            return {"error": "handle must be a non-empty payment handle"}
 
         preferred = []
         for m in request.get("preferred_methods", ["upi"]):
@@ -186,6 +225,8 @@ class UniPayAPI:
             max_fee_absolute=request.get("max_fee_absolute", 100.0),
             settlement_speed_preference=speed,
         )
+        if prefs.max_fee_percentage < 0 or prefs.max_fee_absolute < 0:
+            return {"error": "fee limits cannot be negative"}
 
         actual_handle = self.receiver_engine.register_receiver(prefs, handle)
         return {"handle": actual_handle, "receiver_id": receiver_id}

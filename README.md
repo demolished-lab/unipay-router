@@ -95,10 +95,15 @@ sequenceDiagram
 git clone https://github.com/your-org/unipay-router.git
 cd unipay-router
 
-# Start with Docker Compose
-docker-compose up -d
+# Start with Docker Compose (or run `python -m unipay_router.server`)
+docker compose up --build
 
-# Test the API
+# Register a receiver
+curl -X POST http://localhost:3000/v1/receiver-preferences \
+  -H "Content-Type: application/json" \
+  -d '{"receiver_id":"bob","handle":"bob@unipay","preferred_methods":["upi"]}'
+
+# Create a payment intent
 curl -X POST http://localhost:3000/v1/payment-intents \
   -H "Content-Type: application/json" \
   -d '{
@@ -111,6 +116,42 @@ curl -X POST http://localhost:3000/v1/payment-intents \
     }
   }'
 ```
+
+### Zero-cost local MVP
+
+The router runs without Hyperswitch, a database, provider credentials, or paid
+APIs. It uses deterministic in-memory provider profiles for route selection,
+which is suitable for local development and demos. Python 3.10+ is the only
+runtime requirement:
+
+```shell
+python -m venv .venv
+. .venv/bin/activate
+pip install -e .
+python -m unipay_router.server
+```
+
+In a second terminal, register a receiver and request a route:
+
+```shell
+curl -X POST http://localhost:3000/v1/receiver-preferences \
+  -H 'Content-Type: application/json' \
+  -d '{"receiver_id":"bob","handle":"bob@unipay","preferred_methods":["upi"]}'
+
+curl -X POST http://localhost:3000/v1/payment-intents \
+  -H 'Content-Type: application/json' \
+  -d '{"amount":1000,"currency":"INR","receiver_handle":"bob@unipay","sender":{"preferred_methods":["upi"]}}'
+```
+
+Docker is optional and uses the included local-only Compose file:
+
+```shell
+docker compose up --build
+```
+
+This MVP does not move real money. Real payment acceptance requires regulated
+provider accounts, credentials, webhook verification, durable storage, and a
+security/compliance review before production use.
 
 ## Features
 

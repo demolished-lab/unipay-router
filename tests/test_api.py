@@ -43,6 +43,25 @@ class TestUniPayAPI:
         })
         assert "error" in result
 
+    def test_create_payment_intent_rejects_non_positive_amount(self):
+        result = self.api.create_payment_intent({
+            "amount": 0,
+            "currency": "INR",
+            "receiver_handle": "test@unipay",
+        })
+        assert result["error"] == "amount must be a positive finite number"
+
+    def test_confirm_payment_intent_is_explicitly_simulated(self):
+        result = self.api.create_payment_intent({
+            "amount": 1000,
+            "currency": "INR",
+            "receiver_handle": "test@unipay",
+            "sender": {"preferred_methods": ["upi"]},
+        })
+        confirmed = self.api.confirm_payment_intent(result["id"])
+        assert confirmed["state"] == "settled"
+        assert confirmed["simulated"] is True
+
     def test_create_receiver_preference(self):
         result = self.api.create_receiver_preference({
             "receiver_id": "test_user",

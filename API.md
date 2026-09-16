@@ -78,6 +78,26 @@ GET /v1/payment-intents/{id}
 
 ---
 
+### Confirm Payment Intent (local simulation)
+
+```http
+POST /v1/payment-intents/{id}/confirm
+```
+
+This endpoint advances the intent through the payment lifecycle using the
+local in-memory simulator. It does **not** contact a bank, payment provider,
+or move money. It is intended for UI and integration testing only.
+
+```json
+{
+  "id": "pi_a1b2c3d4",
+  "state": "settled",
+  "simulated": true
+}
+```
+
+---
+
 ## Receiver Preferences
 
 ### Create/Update Receiver Preferences
