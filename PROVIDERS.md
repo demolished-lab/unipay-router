@@ -38,6 +38,164 @@ curl -X POST http://localhost:3000/v1/payment-intents \
 For UI integration tests, call `POST /v1/payment-intents/{id}/confirm`. The
 response includes `"simulated": true`; it does not contact a bank or provider.
 
+## Local webhook testing with ngrok
+
+ngrok creates a temporary public HTTPS URL and forwards requests to your local
+UniPay server. This is useful because payment providers cannot call
+`localhost` directly. The free ngrok path is suitable for sandbox testing;
+URLs, quotas, and available features depend on the current ngrok plan.
+
+### Step 1: Install and authenticate ngrok
+
+Install ngrok from the [official download page](https://ngrok.com/download),
+then connect the CLI to your ngrok account using the authentication command
+shown in the ngrok dashboard. Do not commit the auth token to Git.
+
+Confirm that the CLI is available:
+
+```bash
+ngrok version
+```
+
+### Step 2: Start UniPay Router locally
+
+Run the router on port 3000:
+
+```bash
+python -m unipay_router.server
+```
+
+In another terminal, confirm that it is reachable locally:
+
+```bash
+curl http://127.0.0.1:3000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok","providers":5,"receivers":3,"payment_intents":0,"graph_nodes":30,"graph_edges":51}
+```
+
+### Step 3: Start the HTTPS tunnel
+
+Forward public HTTPS traffic to the local port:
+
+```bash
+ngrok http 3000
+```
+
+Copy the `https://...ngrok...` forwarding URL shown by the ngrok agent. Keep
+this terminal running. The URL is temporary unless your ngrok plan provides a
+reserved domain.
+
+ngrok’s [official webhook guide](https://ngrok.com/docs/share-localhost/webhooks)
+uses the same workflow: start the local handler, run `ngrok http <port>`, and
+register the generated HTTPS URL with the provider.
+
+### Step 4: Choose the provider webhook URL
+
+Append the provider-specific path:
+
+```text
+Razorpay:  https://YOUR-NGROK-DOMAIN/v1/webhooks/razorpay
+Cashfree:  https://YOUR-NGROK-DOMAIN/v1/webhooks/cashfree
+PayU:      https://YOUR-NGROK-DOMAIN/v1/webhooks/payu
+```
+
+For example:
+
+```text
+https://abc123.ngrok-free.app/v1/webhooks/razorpay
+```
+
+Configure this URL in the provider’s **Test/Sandbox** dashboard, not Live
+Mode. If the provider requires a URL ending in port 443, use the HTTPS URL
+without adding a local port.
+
+### Step 5: Configure webhook secrets locally
+
+For Razorpay and Cashfree, configure the same sandbox webhook secret in the
+environment before starting the router:
+
+```bash
+export RAZORPAY_WEBHOOK_SECRET='your-test-webhook-secret'
+export CASHFREE_WEBHOOK_SECRET='your-test-webhook-secret'
+python -m unipay_router.server
+```
+
+The current handler verifies Razorpay’s `X-Razorpay-Signature` and Cashfree’s
+`x-webhook-signature` when the corresponding secret is set. It verifies the
+raw body, as required by the providers. PayU’s current local handler normalizes
+the callback but does not yet implement provider-specific signature
+verification; treat PayU webhook testing as payload-shape testing only until a
+real PayU adapter is added.
+
+Do not disable signature checks in a real integration. When a secret is unset,
+the current local-development handler intentionally skips verification so that
+unsigned fixture payloads can be used; this is not production-safe.
+
+### Step 6: Trigger a sandbox event
+
+Use the provider’s Test Mode checkout and test instruments documented in the
+sections below. Complete a test success or failure transaction. The provider
+should send a callback to the ngrok URL.
+
+You can also send a local fixture through the tunnel to verify connectivity:
+
+```bash
+curl -i -X POST https://YOUR-NGROK-DOMAIN/v1/webhooks/razorpay \
+  -H 'Content-Type: application/json' \
+  -d '{"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_test_123","amount":1000,"currency":"INR","status":"captured"}}}}'
+```
+
+The local API should return normalized JSON similar to:
+
+```json
+{
+  "event":"payment.captured",
+  "payment_id":"pay_test_123",
+  "provider":"razorpay",
+  "status":"captured"
+}
+```
+
+### Step 7: Inspect and replay requests
+
+Open the ngrok Traffic Inspector at:
+
+```text
+http://127.0.0.1:4040
+```
+
+Inspect the request method, URL, headers, raw body, response status, and
+response body. ngrok’s inspector can replay captured requests, which is useful
+for debugging parser and signature-validation changes without performing a new
+sandbox payment.
+
+### Step 8: Troubleshoot common failures
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Provider reports timeout | Router or ngrok is not running | Start both terminals and retry the test event |
+| Provider cannot save URL | HTTP URL, localhost URL, or unsupported domain | Use the HTTPS ngrok forwarding URL and the correct provider path |
+| `404 Not Found` | Incorrect path | Use `/v1/webhooks/razorpay`, `/cashfree`, or `/payu` |
+| `Invalid webhook` | Bad signature or malformed fixture | Use the exact sandbox secret and raw provider payload |
+| Request visible in ngrok but not app logs | Local server stopped or wrong port | Confirm `curl http://127.0.0.1:3000/health` and restart `ngrok http 3000` |
+| Works once, then fails after restart | Temporary ngrok URL changed | Update the provider dashboard webhook URL after each new tunnel |
+
+### Security rules for tunnels
+
+- Use Test/Sandbox credentials and test transactions only.
+- Never expose a production provider secret or live webhook URL through a
+  development tunnel.
+- Do not paste webhook secrets, API secrets, or card data into screenshots or
+  Git commits.
+- Stop ngrok when finished; a running tunnel exposes your local endpoint.
+- Keep signature verification enabled for provider callbacks.
+- Treat the ngrok URL as public and temporary, even if it is difficult to
+  guess.
+
 ## Gateway comparison
 
 | Gateway | Free test mode | Test credentials | Test webhooks | Live processing |
