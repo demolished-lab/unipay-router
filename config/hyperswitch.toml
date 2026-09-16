@@ -1,0 +1,70 @@
+# Hyperswitch Configuration for Universal Payment Router
+# See: https://github.com/juspay/hyperswitch/blob/main/config/config.example.toml
+
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[master_database]
+username = "postgres"
+password = "postgres"
+host = "localhost"
+port = 5432
+dbname = "hyperswitch_db"
+max_pool_size = 5
+
+[redis]
+host = "localhost"
+port = 6379
+pool_max_idle_timeout = 10
+pool_size = 5
+
+# ── Connector Configurations ────────────────────────────────────────────────
+
+[connectors]
+base_url = "https://api.razorpay.com/v1/"
+
+[connectors.razorpay]
+base_url = "https://api.razorpay.com/v1/"
+[connectors.razorpay.auth]
+type = "header_key"
+api_key = "rzp_test_XXXXX"
+
+[connectors.cashfree]
+base_url = "https://sandbox.cashfree.com/pg"
+[connectors.cashfree.auth]
+type = "header_key"
+api_key = "TEST_XXXXX"
+
+[connectors.payu]
+base_url = "https://test.payu.in"
+[connectors.payu.auth]
+type = "body_key"
+api_key = "TEST_XXXXX"
+key1 = "TEST_XXXXX"
+
+# ── Routing Configuration ────────────────────────────────────────────────────
+
+[routing]
+algorithm = "priority_based"
+
+[routing.priority_based]
+# Order matters: first connector = highest priority
+priority = ["razorpay", "cashfree", "payu"]
+
+# ── Webhook Configuration ────────────────────────────────────────────────────
+
+[webhooks]
+outgoing_enabled = true
+redis_lock_expiry_seconds = 180
+
+# ── Payment Method Filters ──────────────────────────────────────────────────
+
+[pm_filters.razorpay]
+payment_methods = ["card", "upi", "wallet", "netbanking"]
+
+[pm_filters.cashfree]
+payment_methods = ["card", "upi", "wallet", "netbanking"]
+
+[pm_filters.payu]
+payment_methods = ["card", "upi", "wallet", "netbanking"]
