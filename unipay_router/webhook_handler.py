@@ -12,6 +12,7 @@ import os
 import urllib.request
 from dataclasses import dataclass
 from enum import Enum
+from urllib.parse import urlparse
 
 try:
     import httpx
@@ -187,12 +188,14 @@ class WebhookHandler:
             headers["X-Signature"] = base64.b64encode(signature).decode()
 
         try:
+            if urlparse(url).scheme not in {"http", "https"}:
+                return False
             if httpx:
                 resp = httpx.post(url, json=payload, headers=headers, timeout=10.0)
                 return resp.status_code < 400
             else:
                 req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - scheme is allowlisted above
                     return resp.status < 400
         except Exception:
             return False

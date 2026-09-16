@@ -33,6 +33,9 @@ jobs:
       - name: Run unit and integration tests
         run: python -m pytest -q
 
+      - name: Run Bandit security scan
+        run: bandit -r unipay_router vercel_app.py -x tests --severity-level medium --confidence-level medium
+
       - name: Compile Python modules
         run: python -m compileall -q unipay_router vercel_app.py
 

@@ -9,6 +9,7 @@ All documentation for the Universal Payment Router.
 - [API Reference](API.md) — REST API endpoints and examples
 - [Postman Collection](../postman/UniPay-Router.postman_collection.json) — Importable requests for all API endpoints
 - [OpenAPI Specification](../openapi/openapi.json) — OpenAPI 3.1 schema for Swagger and client generation
+- [Interactive Swagger UI](swagger.html) — Browser-based API explorer for the OpenAPI specification
 
 ## Components
 
@@ -22,6 +23,7 @@ All documentation for the Universal Payment Router.
 - [Deployment](DEPLOYMENT.md) — Docker, cloud, and local setup
 - [Free Hosting Quickstart](../FREE-HOSTING.md) — Deploy on Render Free or Vercel Functions
 - [Load Testing](../LOAD-TESTING.md) — Locust workloads and benchmark guidance
+- [Async End-to-End Tests](../tests/test_e2e_async.py) — pytest-asyncio and httpx API workflow coverage
 - [Security](SECURITY.md) — PCI compliance, API keys, and best practices
 
 ## Development

@@ -9,6 +9,7 @@ Uses multiple free providers with fallback:
 from __future__ import annotations
 
 import time
+from urllib.parse import urlparse
 from dataclasses import dataclass
 
 try:
@@ -141,12 +142,14 @@ class FXEngine:
     def _http_get(self, url: str) -> dict | None:
         """HTTP GET with timeout."""
         try:
+            if urlparse(url).scheme not in {"http", "https"}:
+                return None
             if httpx:
                 resp = httpx.get(url, timeout=10.0)
                 return resp.json()
             else:
                 req = urllib.request.Request(url, headers={"User-Agent": "UniPayRouter/0.1"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - scheme is allowlisted above
                     return json.loads(resp.read())
         except Exception:
             return None

@@ -132,7 +132,7 @@ class UniPayRequestHandler(BaseHTTPRequestHandler):
             self._send(500, {"error": "internal server error", "detail": str(exc)})
 
 
-def run(host: str = "0.0.0.0", port: int = 3000) -> None:
+def run(host: str = "0.0.0.0", port: int = 3000) -> None:  # nosec B104 - required for container hosting
     """Run the local API until interrupted."""
     server = UniPayHTTPServer((host, port))
     print(f"UniPay Router listening on http://{host}:{port}")
@@ -145,4 +145,4 @@ def run(host: str = "0.0.0.0", port: int = 3000) -> None:
 
 
 if __name__ == "__main__":
-    run(os.getenv("HOST", "0.0.0.0"), int(os.getenv("PORT", "3000")))
+    run(os.getenv("HOST", "0.0.0.0"), int(os.getenv("PORT", "3000")))  # nosec B104 - required for container hosting

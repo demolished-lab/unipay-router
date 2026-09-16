@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 try:
     import httpx
@@ -42,6 +43,8 @@ class HyperswitchClient:
 
     def _request(self, method: str, path: str, body: dict | None = None) -> dict:
         url = f"{self._base}{path}"
+        if urlparse(url).scheme not in {"http", "https"}:
+            raise ValueError("Hyperswitch URL must use http or https")
         if httpx:
             resp = httpx.request(
                 method, url, json=body, headers=self._headers(),
@@ -53,7 +56,7 @@ class HyperswitchClient:
             req = urllib.request.Request(
                 url, data=data, headers=self._headers(), method=method,
             )
-            with urllib.request.urlopen(req, timeout=self.config.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.config.timeout) as resp:  # nosec B310 - scheme is allowlisted above
                 return json.loads(resp.read())
 
     # ── Payment Intents ──────────────────────────────────────────────────────
